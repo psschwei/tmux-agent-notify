@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "\"$HOME\"/.claude-tmux-notify/claude-tmux-notify.sh" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "\"$HOME\"/.claude-tmux-notify/claude-tmux-notify.sh" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "\"$HOME\"/.claude-tmux-notify/claude-tmux-notify.sh" } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "\"$HOME\"/.claude-tmux-notify/claude-tmux-notify.sh" } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "\"$HOME\"/.claude-tmux-notify/claude-tmux-notify.sh" } ] }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+# Swift Package Manager build output
+.build/
+.swiftpm/
+Package.resolved
+
+# Assembled app bundle (produced by `make app`)
+*.app/
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+*.xcodeproj
+*.xcworkspace
+.vscode/
+*.swp
