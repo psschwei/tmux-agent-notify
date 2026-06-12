@@ -38,7 +38,7 @@ final class StatusController: NSObject, NSMenuDelegate {
         guard let button = statusItem.button else { return }
         let count = pending.count
         let blocking = pending.contains(where: \.isBlocking)
-        let symbol = count == 0 ? "bell" : (blocking ? "bell.badge.fill" : "bell.badge")
+        let symbol = blocking ? "eye.fill" : "eye"
         let img = NSImage(systemSymbolName: symbol, accessibilityDescription: "Claude sessions")
         button.image = img
         button.imagePosition = .imageLeading

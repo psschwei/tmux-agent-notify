@@ -1,10 +1,13 @@
+import Foundation
 import Testing
 @testable import NotifyCore
 
-private func sess(_ sid: String, pane: String?, blocking: Bool = false, ts: String = "t") -> PendingSession {
+private func sess(_ sid: String, pane: String?, blocking: Bool = false, ts: String = "t",
+                  transcriptPath: String? = nil) -> PendingSession {
     PendingSession(sessionId: sid, kind: blocking ? .permission : .idle, paneId: pane,
                    windowId: "@1", tmuxSocket: "/s,1,0", tmuxSession: "0",
-                   windowIndex: "1", windowName: "main", clientTty: nil, cwd: "/x", message: nil,
+                   windowIndex: "1", windowName: "main", clientTty: nil, cwd: "/x",
+                   transcriptPath: transcriptPath, message: nil,
                    title: nil, ts: ts, gitBranch: nil, gitDirty: false)
 }
 
@@ -72,4 +75,53 @@ private struct PassthroughChecker {
     ])
     #expect(out.map(\.paneId) == ["%1", "%2"])
     #expect(out[0].sessionId == "a2")      // a replaced in place
+}
+
+// MARK: - transcriptAdvanced
+
+/// Write a temp file and stamp its mtime, returning the path.
+private func transcript(mtime: Date) throws -> String {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("notify-test-\(UUID().uuidString).jsonl")
+    try Data().write(to: url)
+    try FileManager.default.setAttributes([.modificationDate: mtime], ofItemAtPath: url.path)
+    return url.path
+}
+
+@Test func transcriptNewerThanEventIsAdvanced() throws {
+    let eventTs = "2026-06-12T12:00:00Z"
+    let mtime = ISO8601DateFormatter().date(from: "2026-06-12T12:00:05Z")!
+    let s = sess("x", pane: "%1", ts: eventTs, transcriptPath: try transcript(mtime: mtime))
+    #expect(LivenessChecker().transcriptAdvanced(s))
+}
+
+@Test func transcriptEqualToEventIsNotAdvanced() throws {
+    let eventTs = "2026-06-12T12:00:00Z"
+    let mtime = ISO8601DateFormatter().date(from: eventTs)!
+    let s = sess("x", pane: "%1", ts: eventTs, transcriptPath: try transcript(mtime: mtime))
+    #expect(!LivenessChecker().transcriptAdvanced(s))   // genuinely parked at Stop
+}
+
+@Test func transcriptOlderThanEventIsNotAdvanced() throws {
+    let mtime = ISO8601DateFormatter().date(from: "2026-06-12T11:59:55Z")!
+    let s = sess("x", pane: "%1", ts: "2026-06-12T12:00:00Z",
+                 transcriptPath: try transcript(mtime: mtime))
+    #expect(!LivenessChecker().transcriptAdvanced(s))
+}
+
+@Test func missingTranscriptFailsClosed() {
+    let s = sess("x", pane: "%1", ts: "2026-06-12T12:00:00Z",
+                 transcriptPath: "/no/such/file.jsonl")
+    #expect(!LivenessChecker().transcriptAdvanced(s))   // keep — never hide a real prompt
+}
+
+@Test func absentTranscriptPathFailsClosed() {
+    let s = sess("x", pane: "%1", ts: "2026-06-12T12:00:00Z", transcriptPath: nil)
+    #expect(!LivenessChecker().transcriptAdvanced(s))
+}
+
+@Test func unparseableTimestampFailsClosed() throws {
+    let mtime = ISO8601DateFormatter().date(from: "2026-06-12T12:00:05Z")!
+    let s = sess("x", pane: "%1", ts: "not-a-date", transcriptPath: try transcript(mtime: mtime))
+    #expect(!LivenessChecker().transcriptAdvanced(s))
 }

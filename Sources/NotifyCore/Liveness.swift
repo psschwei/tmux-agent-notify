@@ -38,14 +38,40 @@ public struct LivenessChecker {
         return tree.hasDescendant(named: agentProcessName, under: pid) ? .live : .noAgent
     }
 
+    /// True when the session's transcript has advanced *past* the pending event's
+    /// timestamp — i.e. Claude produced output after it said it needed attention,
+    /// so the attention was already given and the entry is stale.
+    ///
+    /// Claude Code emits no hook when a turn resumes (e.g. after approving a
+    /// permission prompt), so a `permission`/`idle` entry would otherwise linger
+    /// until the next `UserPromptSubmit`. The transcript file's mtime is the
+    /// resume signal we can read without a hook.
+    ///
+    /// Fails closed: a missing/unreadable transcript or an unparseable timestamp
+    /// returns `false` (keep the session) so we never hide a real prompt.
+    /// Strictly-greater so a `Stop` that wrote the transcript in the same second
+    /// it fired is kept.
+    public func transcriptAdvanced(_ s: PendingSession) -> Bool {
+        guard let path = s.transcriptPath, !path.isEmpty,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let mtime = attrs[.modificationDate] as? Date
+        else { return false }
+        let fmt = ISO8601DateFormatter()
+        guard let eventDate = fmt.date(from: s.ts) else { return false }
+        return mtime > eventDate
+    }
+
     /// Keep only sessions still backed by a live agent (or non-tmux, which we
-    /// can't verify and so keep). Drops `paneGone` and `noAgent`.
+    /// can't verify and so keep). Drops `paneGone` and `noAgent`, and drops any
+    /// session whose transcript advanced past its event (resumed/busy → stale).
     public func liveOnly(_ pending: [PendingSession]) -> [PendingSession] {
         let tree = ProcessTree()
         return pending.filter {
             switch classify($0, tree: tree) {
-            case .live, .notTmux: return true
-            case .paneGone, .noAgent: return false
+            case .live, .notTmux:
+                return !transcriptAdvanced($0)
+            case .paneGone, .noAgent:
+                return false
             }
         }
     }

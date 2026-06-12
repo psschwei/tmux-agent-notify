@@ -13,6 +13,7 @@ public struct PendingSession: Identifiable, Sendable {
     public let windowName: String?
     public let clientTty: String?
     public let cwd: String?
+    public let transcriptPath: String?
     public let message: String?
     public let title: String?
     public let ts: String
@@ -72,7 +73,8 @@ public final class EventStore {
                     windowId: e.windowId, tmuxSocket: e.tmuxSocket,
                     tmuxSession: e.tmuxSession, windowIndex: e.windowIndex,
                     windowName: e.windowName,
-                    clientTty: e.clientTty, cwd: e.cwd, message: e.message,
+                    clientTty: e.clientTty, cwd: e.cwd,
+                    transcriptPath: e.transcriptPath, message: e.message,
                     title: e.title, ts: e.ts,
                     gitBranch: e.gitBranch, gitDirty: (e.gitDirty?.isEmpty == false)))
             case .clear, .end:
@@ -200,7 +202,7 @@ public final class EventStore {
             tmuxSession: s.tmuxSession, windowId: s.windowId, windowIndex: s.windowIndex,
             windowName: s.windowName,
             clientTty: s.clientTty, paneTitle: nil, paneCmd: nil, cwd: s.cwd,
-            transcriptPath: nil, message: s.message, title: s.title,
+            transcriptPath: s.transcriptPath, message: s.message, title: s.title,
             gitBranch: s.gitBranch, gitDirty: s.gitDirty ? "1" : "")
         guard let data = try? JSONEncoder().encode(e) else { return nil }
         return String(decoding: data, as: UTF8.self)
