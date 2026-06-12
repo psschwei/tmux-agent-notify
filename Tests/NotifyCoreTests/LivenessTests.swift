@@ -4,8 +4,8 @@ import Testing
 private func sess(_ sid: String, pane: String?, blocking: Bool = false, ts: String = "t") -> PendingSession {
     PendingSession(sessionId: sid, kind: blocking ? .permission : .idle, paneId: pane,
                    windowId: "@1", tmuxSocket: "/s,1,0", tmuxSession: "0",
-                   windowIndex: "1", clientTty: nil, cwd: "/x", message: nil,
-                   title: nil, ts: ts)
+                   windowIndex: "1", windowName: "main", clientTty: nil, cwd: "/x", message: nil,
+                   title: nil, ts: ts, gitBranch: nil, gitDirty: false)
 }
 
 // A checker whose liveOnly is the identity (so we test collapse logic in

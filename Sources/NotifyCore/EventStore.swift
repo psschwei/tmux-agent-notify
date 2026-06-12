@@ -10,14 +10,38 @@ public struct PendingSession: Identifiable, Sendable {
     public let tmuxSocket: String?
     public let tmuxSession: String?
     public let windowIndex: String?
+    public let windowName: String?
     public let clientTty: String?
     public let cwd: String?
     public let message: String?
     public let title: String?
     public let ts: String
+    public let gitBranch: String?
+    public let gitDirty: Bool
 
     /// True if blocking (permission prompt) — sorts/colors ahead of idle.
     public var isBlocking: Bool { kind == .permission }
+
+    /// cwd with a `$HOME` prefix collapsed to `~`. "?" when cwd is absent.
+    public var abbreviatedPath: String {
+        guard let p = cwd else { return "?" }
+        let home = NSHomeDirectory()
+        if p == home { return "~" }
+        if p.hasPrefix(home + "/") { return "~" + p.dropFirst(home.count) }
+        return p
+    }
+
+    /// "branch" or "branch*" (dirty), or nil when not in a git repo.
+    public var branchLabel: String? {
+        guard let b = gitBranch, !b.isEmpty else { return nil }
+        return gitDirty ? b + "*" : b
+    }
+
+    /// The tmux window name, or nil when not running inside tmux / name absent.
+    public var windowLabel: String? {
+        guard let n = windowName, !n.isEmpty else { return nil }
+        return n
+    }
 }
 
 /// Reconciles the append-only event log into the current pending set.
@@ -47,8 +71,10 @@ public final class EventStore {
                     sessionId: e.sessionId, kind: e.kind, paneId: e.paneId,
                     windowId: e.windowId, tmuxSocket: e.tmuxSocket,
                     tmuxSession: e.tmuxSession, windowIndex: e.windowIndex,
+                    windowName: e.windowName,
                     clientTty: e.clientTty, cwd: e.cwd, message: e.message,
-                    title: e.title, ts: e.ts))
+                    title: e.title, ts: e.ts,
+                    gitBranch: e.gitBranch, gitDirty: (e.gitDirty?.isEmpty == false)))
             case .clear, .end:
                 continue
             }
@@ -172,8 +198,10 @@ public final class EventStore {
             schema: currentSchema, ts: s.ts, event: "Compact", kind: s.kind,
             sessionId: s.sessionId, paneId: s.paneId, tmuxSocket: s.tmuxSocket,
             tmuxSession: s.tmuxSession, windowId: s.windowId, windowIndex: s.windowIndex,
+            windowName: s.windowName,
             clientTty: s.clientTty, paneTitle: nil, paneCmd: nil, cwd: s.cwd,
-            transcriptPath: nil, message: s.message, title: s.title)
+            transcriptPath: nil, message: s.message, title: s.title,
+            gitBranch: s.gitBranch, gitDirty: s.gitDirty ? "1" : "")
         guard let data = try? JSONEncoder().encode(e) else { return nil }
         return String(decoding: data, as: UTF8.self)
     }

@@ -79,9 +79,9 @@ final class StatusController: NSObject, NSMenuDelegate {
             loc = "no-tmux"
         }
         let kind = s.isBlocking ? "⛔︎ permission" : "· idle"
-        let dir = s.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "?"
         let stale = (s.paneId.map { stalePanes.contains($0) } ?? false)
-        var title = "[\(keyHint)]  \(loc)  \(kind)  \(dir)"
+        var title = "[\(keyHint)]  \(loc)  \(kind)"
+        if let w = s.windowLabel { title += "  \(w)" }
         if stale { title += "  (pane gone)" }
 
         let item = NSMenuItem(title: title, action: #selector(jumpTo(_:)), keyEquivalent: "")

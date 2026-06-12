@@ -2,11 +2,13 @@ import Foundation
 import Testing
 @testable import NotifyCore
 
-private func ev(_ kind: EventKind, _ sid: String, pane: String = "%1", ts: String = "t") -> Event {
+private func ev(_ kind: EventKind, _ sid: String, pane: String = "%1", ts: String = "t",
+                gitBranch: String? = nil, gitDirty: String? = nil) -> Event {
     Event(schema: 1, ts: ts, event: nil, kind: kind, sessionId: sid,
           paneId: pane, tmuxSocket: "/s,1,0", tmuxSession: "0", windowId: "@1",
-          windowIndex: "1", clientTty: nil, paneTitle: nil, paneCmd: nil,
-          cwd: "/x", transcriptPath: nil, message: nil, title: nil)
+          windowIndex: "1", windowName: "main", clientTty: nil, paneTitle: nil, paneCmd: nil,
+          cwd: "/x", transcriptPath: nil, message: nil, title: nil,
+          gitBranch: gitBranch, gitDirty: gitDirty)
 }
 
 @Test func latestEventWins() {
@@ -36,6 +38,20 @@ private func ev(_ kind: EventKind, _ sid: String, pane: String = "%1", ts: Strin
     let p = EventStore.reduce([ev(.idle, "a"), ev(.clear, "a"), ev(.idle, "a")])
     #expect(p.count == 1)
     #expect(p[0].kind == .idle)
+}
+
+@Test func reduceCarriesGitContext() {
+    let p = EventStore.reduce([ev(.idle, "a", gitBranch: "main", gitDirty: "1")])
+    #expect(p.count == 1)
+    #expect(p[0].gitBranch == "main")
+    #expect(p[0].gitDirty == true)
+    #expect(p[0].branchLabel == "main*")
+}
+
+@Test func reduceNoGitContext() {
+    let p = EventStore.reduce([ev(.idle, "a")])
+    #expect(p[0].gitDirty == false)
+    #expect(p[0].branchLabel == nil)
 }
 
 @Test func parseSkipsUnknownSchema() {

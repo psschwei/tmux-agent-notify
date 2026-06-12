@@ -14,10 +14,20 @@ struct OverlayRow: Identifiable {
         }
         return "no-tmux"
     }
-    var dir: String { session.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "?" }
+    var dir: String { session.abbreviatedPath }
+    var branch: String? { session.branchLabel }
+    var window: String? { session.windowLabel }
     var note: String {
         (session.title ?? session.message ?? "")
             .replacingOccurrences(of: "\n", with: " ")
+    }
+
+    /// Secondary line: path, optional `⎇ branch`, optional `— note`.
+    var subtitle: String {
+        var s = dir
+        if let b = branch { s += " ⎇ \(b)" }
+        if !note.isEmpty { s += " — \(note)" }
+        return s
     }
 }
 
@@ -61,6 +71,13 @@ struct OverlayView: View {
                             HStack(spacing: 6) {
                                 Text(row.location)
                                     .font(.system(.body, design: .monospaced))
+                                if let w = row.window {
+                                    Text(w)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
                                 if row.session.isBlocking {
                                     Text("permission").font(.caption).foregroundStyle(.red)
                                 } else {
@@ -70,10 +87,11 @@ struct OverlayView: View {
                                     Text("pane gone").font(.caption).foregroundStyle(.orange)
                                 }
                             }
-                            Text(row.note.isEmpty ? row.dir : "\(row.dir) — \(row.note)")
+                            Text(row.subtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                                .truncationMode(.middle)
                         }
                         Spacer(minLength: 0)
                     }

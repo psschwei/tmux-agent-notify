@@ -16,6 +16,7 @@ set -u
 # NOTE: do not name this TMUX — that env var holds the tmux *socket*, which we read below.
 JQ="$(command -v jq || true)";       [ -n "$JQ" ]       || JQ=/opt/homebrew/bin/jq
 TMUX_BIN="$(command -v tmux || true)"; [ -n "$TMUX_BIN" ] || TMUX_BIN=/opt/homebrew/bin/tmux
+GIT_BIN="$(command -v git || true)";   [ -n "$GIT_BIN" ]  || GIT_BIN=/usr/bin/git
 
 BASE_DIR="$HOME/.claude-tmux-notify"
 EVENTS="$BASE_DIR/events.jsonl"
@@ -56,13 +57,24 @@ esac
 pane_id="${TMUX_PANE:-}"
 tmux_socket="${TMUX:-}"
 
-tmux_session=""; window_id=""; window_index=""; client_tty=""; pane_title=""; pane_cmd=""
+tmux_session=""; window_id=""; window_index=""; window_name=""; client_tty=""; pane_title=""; pane_cmd=""
 if [ -n "$pane_id" ]; then
   # Capture context at event time so a later-closed pane still renders. Use a literal
   # tab as the separator (tmux's display-message FORMAT does not expand \t).
-  fmt=$'#{session_name}\t#{window_id}\t#{window_index}\t#{client_tty}\t#{pane_title}\t#{pane_current_command}'
+  fmt=$'#{session_name}\t#{window_id}\t#{window_index}\t#{window_name}\t#{client_tty}\t#{pane_title}\t#{pane_current_command}'
   if info="$("$TMUX_BIN" display-message -p -t "$pane_id" "$fmt" 2>/dev/null)"; then
-    IFS=$'\t' read -r tmux_session window_id window_index client_tty pane_title pane_cmd <<< "$info"
+    IFS=$'\t' read -r tmux_session window_id window_index window_name client_tty pane_title pane_cmd <<< "$info"
+  fi
+fi
+
+# --- git context, derived from cwd (tmux doesn't know the branch) ---
+git_branch=""; git_dirty=""
+if [ -n "$cwd" ] && [ -x "$GIT_BIN" ]; then
+  if br="$("$GIT_BIN" -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null)"; then
+    git_branch="$br"   # "HEAD" when detached — acceptable
+    if [ -n "$("$GIT_BIN" -C "$cwd" status --porcelain 2>/dev/null)" ]; then
+      git_dirty="1"
+    fi
   fi
 fi
 
@@ -80,6 +92,7 @@ line="$("$JQ" -c -n \
   --arg tmux_session "$tmux_session" \
   --arg window_id "$window_id" \
   --arg window_index "$window_index" \
+  --arg window_name "$window_name" \
   --arg client_tty "$client_tty" \
   --arg pane_title "$pane_title" \
   --arg pane_cmd "$pane_cmd" \
@@ -87,11 +100,15 @@ line="$("$JQ" -c -n \
   --arg transcript_path "$transcript_path" \
   --arg message "$message" \
   --arg title "$title" \
+  --arg git_branch "$git_branch" \
+  --arg git_dirty "$git_dirty" \
   '{schema:$schema, ts:$ts, event:$event, kind:$kind, session_id:$session_id,
     pane_id:$pane_id, tmux_socket:$tmux_socket, tmux_session:$tmux_session,
-    window_id:$window_id, window_index:$window_index, client_tty:$client_tty,
+    window_id:$window_id, window_index:$window_index, window_name:$window_name,
+    client_tty:$client_tty,
     pane_title:$pane_title, pane_cmd:$pane_cmd, cwd:$cwd,
-    transcript_path:$transcript_path, message:$message, title:$title}')"
+    transcript_path:$transcript_path, message:$message, title:$title,
+    git_branch:$git_branch, git_dirty:$git_dirty}')"
 
 # --- atomic append under flock (flock may be absent on macOS; degrade gracefully) ---
 if command -v flock >/dev/null 2>&1; then

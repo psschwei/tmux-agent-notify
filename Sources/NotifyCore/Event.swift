@@ -38,6 +38,7 @@ public struct Event: Codable, Sendable {
     public var tmuxSession: String?
     public var windowId: String?
     public var windowIndex: String?
+    public var windowName: String?
     public var clientTty: String?
     public var paneTitle: String?
     public var paneCmd: String?
@@ -48,6 +49,10 @@ public struct Event: Codable, Sendable {
     public var message: String?
     public var title: String?
 
+    // git context, derived from cwd by the hook (tmux doesn't know the branch).
+    public var gitBranch: String?
+    public var gitDirty: String?   // "1" when dirty, "" / absent otherwise
+
     enum CodingKeys: String, CodingKey {
         case schema, ts, event, kind
         case sessionId = "session_id"
@@ -56,12 +61,15 @@ public struct Event: Codable, Sendable {
         case tmuxSession = "tmux_session"
         case windowId = "window_id"
         case windowIndex = "window_index"
+        case windowName = "window_name"
         case clientTty = "client_tty"
         case paneTitle = "pane_title"
         case paneCmd = "pane_cmd"
         case cwd
         case transcriptPath = "transcript_path"
         case message, title
+        case gitBranch = "git_branch"
+        case gitDirty = "git_dirty"
     }
 
     /// `true` when this event references a real tmux pane we could jump to.
