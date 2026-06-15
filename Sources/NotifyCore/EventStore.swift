@@ -194,6 +194,53 @@ public final class EventStore {
         return true
     }
 
+    // MARK: - User-initiated clearing
+
+    /// Append a single `.clear` line for one session, dismissing it from the
+    /// pending set. Reconciliation keys on `session_id`, so the line only needs
+    /// to be the latest event for that session to take effect; context fields
+    /// are carried for log readability. Uses the same `flock` the hook uses, so
+    /// our append never interleaves with a concurrent hook append.
+    public func clear(_ session: PendingSession) {
+        clearAll([session])
+    }
+
+    /// Append `.clear` lines for several sessions under a single lock.
+    public func clearAll(_ sessions: [PendingSession]) {
+        let lines = sessions.compactMap { clearLine(for: $0) }
+        guard !lines.isEmpty else { return }
+        let body = lines.joined(separator: "\n") + "\n"
+
+        Paths.ensureBaseDir()
+        let lockFD = open(Paths.lockFile.path, O_CREAT | O_RDWR, 0o644)
+        if lockFD >= 0 { flock(lockFD, LOCK_EX) }
+        defer { if lockFD >= 0 { flock(lockFD, LOCK_UN); close(lockFD) } }
+
+        guard let data = body.data(using: .utf8) else { return }
+        if let fh = try? FileHandle(forWritingTo: url) {
+            defer { try? fh.close() }
+            fh.seekToEndOfFile()
+            fh.write(data)
+        } else {
+            // File may not exist yet; create it with this content.
+            try? data.write(to: url)
+        }
+    }
+
+    /// Encode a `.clear` event line for the given session.
+    private func clearLine(for s: PendingSession) -> String? {
+        let e = Event(
+            schema: currentSchema, ts: s.ts, event: "ClearByUser", kind: .clear,
+            sessionId: s.sessionId, paneId: s.paneId, tmuxSocket: s.tmuxSocket,
+            tmuxSession: s.tmuxSession, windowId: s.windowId, windowIndex: s.windowIndex,
+            windowName: s.windowName,
+            clientTty: s.clientTty, paneTitle: nil, paneCmd: nil, cwd: s.cwd,
+            transcriptPath: s.transcriptPath, message: s.message, title: s.title,
+            gitBranch: s.gitBranch, gitDirty: s.gitDirty ? "1" : "")
+        guard let data = try? JSONEncoder().encode(e) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     /// Re-encode a pending session as a single JSONL line (schema-compatible).
     private func snapshotLine(for s: PendingSession) -> String? {
         let e = Event(

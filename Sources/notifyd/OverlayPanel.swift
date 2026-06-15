@@ -18,8 +18,15 @@ final class OverlayController {
     private let bridge = TmuxBridge()
     private let keys = "asdfghjkl;qwertyuiop".map { String($0) }
 
+    /// When true, a home-row key dismisses that session instead of jumping. The
+    /// user toggles this with `-` while the overlay is up; reset on each open.
+    private var clearMode = false
+
     /// Source of the current pending set (the app's EventStore-backed reload).
     private let pendingProvider: @MainActor () -> [PendingSession]
+
+    /// Dismiss a session (append `.clear`). Set by the app; shared with the menu.
+    var onClear: ((PendingSession) -> Void)?
 
     init(pendingProvider: @escaping @MainActor () -> [PendingSession]) {
         self.pendingProvider = pendingProvider
@@ -32,17 +39,13 @@ final class OverlayController {
     }
 
     private func show() {
+        clearMode = false
         let pending = pendingProvider()
             .sorted { ($0.isBlocking ? 0 : 1) < ($1.isBlocking ? 0 : 1) }
         rows = buildRows(pending)
 
-        let view = OverlayView(rows: rows)
-        let hosting = NSHostingView(rootView: view)
-        hosting.layout()
-        let size = hosting.fittingSize
-
         let panel = KeyablePanel(
-            contentRect: NSRect(origin: .zero, size: size),
+            contentRect: NSRect(origin: .zero, size: .zero),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered, defer: false)
         panel.level = .statusBar
@@ -52,7 +55,8 @@ final class OverlayController {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        panel.contentView = hosting
+        self.panel = panel
+        installContent()
         center(panel)
 
         // Local key monitor: single keypress resolves a row (or esc closes).
@@ -65,8 +69,19 @@ final class OverlayController {
             return nil   // swallow all keys while the overlay is up
         }
 
-        self.panel = panel
         panel.makeKeyAndOrderFront(nil)
+    }
+
+    /// Build the SwiftUI content for the current `rows` / `clearMode` and install
+    /// it on the panel, resizing the panel to fit. Called on show and on every
+    /// mode toggle so the header and key-chip tint update live.
+    private func installContent() {
+        guard let panel else { return }
+        let hosting = NSHostingView(rootView: OverlayView(rows: rows, clearMode: clearMode))
+        hosting.layout()
+        let size = hosting.fittingSize
+        panel.contentView = hosting
+        panel.setContentSize(size)
     }
 
     private func buildRows(_ pending: [PendingSession]) -> [OverlayRow] {
@@ -91,9 +106,20 @@ final class OverlayController {
 
     private func handleKey(keyCode: UInt16, chars: String?) {
         if keyCode == 53 { close(); return }                      // esc
+        // `-` toggles clear mode in place (don't close): keys then dismiss
+        // instead of jumping.
+        if chars == "-" {
+            clearMode.toggle()
+            installContent()
+            return
+        }
         guard let chars, !chars.isEmpty else { return }
         if let row = rows.first(where: { $0.key == chars }) {
-            if !row.stale { JumpAction.jump(to: row.session) }
+            if clearMode {
+                if !row.stale { onClear?(row.session) }
+            } else {
+                if !row.stale { JumpAction.jump(to: row.session) }
+            }
             close()
         }
         // other keys: ignored (already swallowed by the monitor)

@@ -17,6 +17,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status = StatusController()
         overlay = OverlayController(pendingProvider: { [weak self] in self?.pending ?? [] })
 
+        // Dismissal: both the menu and the overlay append a `.clear` event via
+        // the shared store, then reload so the entry drops immediately.
+        status.onClear = { [weak self] s in self?.store.clear(s); self?.reload() }
+        status.onClearAll = { [weak self] in
+            guard let self else { return }
+            self.store.clearAll(self.pending)
+            self.reload()
+        }
+        overlay.onClear = { [weak self] s in self?.store.clear(s); self?.reload() }
+
         // React to log changes (from the watcher and the menu's Refresh).
         NotificationCenter.default.addObserver(
             self, selector: #selector(reload), name: .logChanged, object: nil)

@@ -36,15 +36,19 @@ struct OverlayRow: Identifiable {
 /// not here — this view is purely presentational so it stays simple.
 struct OverlayView: View {
     let rows: [OverlayRow]
+    /// When true, the header signals dismissal and key chips tint red; pressing
+    /// a key clears that session instead of jumping (handled by the panel).
+    var clearMode: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Image(systemName: "bell.badge.fill")
-                Text("Sessions needing attention")
+                Image(systemName: clearMode ? "bell.slash.fill" : "bell.badge.fill")
+                    .foregroundStyle(clearMode ? Color.red : Color.primary)
+                Text(clearMode ? "Clear which? — press a key" : "Sessions needing attention")
                     .font(.headline)
                 Spacer()
-                Text("esc")
+                Text("- · esc")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
@@ -63,8 +67,9 @@ struct OverlayView: View {
                             .font(.system(.body, design: .monospaced).weight(.bold))
                             .frame(width: 22, height: 22)
                             .background(row.stale ? Color.gray.opacity(0.2)
+                                                  : (clearMode ? Color.red.opacity(0.25)
                                                   : (row.session.isBlocking ? Color.red.opacity(0.25)
-                                                                            : Color.accentColor.opacity(0.2)))
+                                                                            : Color.accentColor.opacity(0.2))))
                             .clipShape(RoundedRectangle(cornerRadius: 5))
 
                         VStack(alignment: .leading, spacing: 1) {

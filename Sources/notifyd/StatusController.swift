@@ -15,6 +15,11 @@ final class StatusController: NSObject, NSMenuDelegate {
     /// Home-row labels reused from the overlay design, shown as menu key hints.
     private let keys = "asdfghjkl;qwertyuiop".map { String($0) }
 
+    /// Dismiss one session / all sessions. Set by the app; both append a
+    /// `.clear` event via the shared `EventStore` and trigger a reload.
+    var onClear: ((PendingSession) -> Void)?
+    var onClearAll: (() -> Void)?
+
     override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -60,10 +65,15 @@ final class StatusController: NSObject, NSMenuDelegate {
         } else {
             for (i, s) in pending.enumerated() {
                 menu.addItem(sessionItem(s, index: i))
+                menu.addItem(clearItem(s))
             }
         }
 
         menu.addItem(.separator())
+        let clearAll = NSMenuItem(title: "Clear All", action: #selector(clearAllSessions), keyEquivalent: "")
+        clearAll.target = self
+        clearAll.isEnabled = !pending.isEmpty
+        menu.addItem(clearAll)
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Open events.jsonl", action: #selector(openLog), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -94,6 +104,18 @@ final class StatusController: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// An ⌥-alternate of the session row: holding Option turns the row into a
+    /// "Clear" action that dismisses the notification instead of jumping. This
+    /// keeps the plain click on `sessionItem` as the jump fast-path.
+    private func clearItem(_ s: PendingSession) -> NSMenuItem {
+        let item = NSMenuItem(title: "Clear notification", action: #selector(clearSession(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = s
+        item.isAlternate = true
+        item.keyEquivalentModifierMask = .option
+        return item
+    }
+
     private func refreshStaleness() {
         // Group pending panes by socket, query live panes once per socket.
         stalePanes.removeAll()
@@ -113,6 +135,15 @@ final class StatusController: NSObject, NSMenuDelegate {
     @objc private func jumpTo(_ sender: NSMenuItem) {
         guard let s = sender.representedObject as? PendingSession else { return }
         JumpAction.jump(to: s)
+    }
+
+    @objc private func clearSession(_ sender: NSMenuItem) {
+        guard let s = sender.representedObject as? PendingSession else { return }
+        onClear?(s)
+    }
+
+    @objc private func clearAllSessions() {
+        onClearAll?()
     }
 
     @objc private func refresh() {
