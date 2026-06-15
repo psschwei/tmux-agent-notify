@@ -57,6 +57,10 @@ The hooks wired are: `Notification`, `Stop`, `UserPromptSubmit`, `SessionStart`,
   permission prompt is blocking). Click it for a dropdown; click a row to jump.
 - **Global hotkey (default ⌥⌘J):** pops an overlay listing pending sessions, each
   bound to a home-row key (`a s d f …`). Press the key to jump; `Esc` to cancel.
+- **Notification banners:** a native macOS banner pops when a session newly needs
+  attention (and again if an idle session escalates to a permission prompt).
+  Click the banner to jump straight to that pane. macOS asks for notification
+  permission the first time the app runs.
 
 ## Configure the hotkey
 
@@ -71,6 +75,20 @@ Create `~/.claude-tmux-notify/config.json`:
   (at least one required).
 
 Restart the app to apply (`make install-agent` restarts it; otherwise relaunch).
+
+## Configure notifications
+
+By default a banner fires for both permission prompts and idle turns. Opt out of
+either kind in `~/.claude-tmux-notify/config.json`:
+
+```json
+{ "notifications": { "permission": true, "idle": false } }
+```
+
+- `permission`: banner when a session blocks on a permission prompt (audible).
+- `idle`: banner when a session finishes a turn / goes idle (silent).
+
+A missing key defaults to `true`. Restart the app to apply.
 
 ## CLI (debugging)
 
