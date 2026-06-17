@@ -3,8 +3,9 @@
 # menu-bar app, when a Claude Code session needs attention.
 #
 # Wired (in ~/.claude/settings.json) to: Notification, Stop, UserPromptSubmit,
-# SessionStart, SessionEnd. Reads the hook JSON on stdin and appends ONE enriched
-# JSON line to ~/.claude-tmux-notify/events.jsonl.
+# SessionStart, SessionEnd, and PostToolUse (matched to ExitPlanMode). Reads the
+# hook JSON on stdin and appends ONE enriched JSON line to
+# ~/.claude-tmux-notify/events.jsonl.
 #
 # Key fact this relies on: tmux exports $TMUX and $TMUX_PANE into the pane shell,
 # and Claude Code's hook child process inherits them — so we read the pane id
@@ -34,6 +35,7 @@ session_id="$(get '.session_id')"
 cwd="$(get '.cwd')"
 transcript_path="$(get '.transcript_path')"
 notification_type="$(get '.notification_type')"
+tool_name="$(get '.tool_name')"
 message="$(get '.message')"
 title="$(get '.title')"
 
@@ -50,6 +52,18 @@ case "$event" in
   UserPromptSubmit) kind="clear" ;;
   SessionStart)     kind="clear" ;;       # (re)start clears prior pending + rebinds pane
   SessionEnd)       kind="end" ;;
+  PostToolUse)
+    # PostToolUse fires after EVERY tool. We only care about ExitPlanMode:
+    # accepting a plan resolves the permission prompt and Claude resumes work,
+    # but no Stop/UserPromptSubmit follows — so without this the pending
+    # `permission` would linger through the whole implementation run. Treat the
+    # accepted plan like a prompt submission and clear. Any other tool: no-op.
+    if [ "$tool_name" = "ExitPlanMode" ]; then
+      kind="clear"
+    else
+      exit 0
+    fi
+    ;;
   *)                kind="idle" ;;
 esac
 

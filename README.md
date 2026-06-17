@@ -49,7 +49,8 @@ make install-agent
 ```
 
 The hooks wired are: `Notification`, `Stop`, `UserPromptSubmit`, `SessionStart`,
-`SessionEnd`. They take effect for **new** Claude Code sessions.
+`SessionEnd`, and `PostToolUse` (matched to `ExitPlanMode`, so accepting a plan
+clears its pending prompt). They take effect for **new** Claude Code sessions.
 
 ## Use
 
